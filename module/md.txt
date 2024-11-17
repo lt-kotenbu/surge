@@ -1,3 +1,26 @@
 # kotenbu
 
 # 这个文件夹用了放我使用的各种模块
+
+---
+
+# 起点去广告
+
+**qx**
+
+**surge**
+
+https://raw.githubusercontent.com/app2smile/rules/master/js/qidian.js
+
+
+# 京东比价
+
+https://raw.githubusercontent.com/QingRex/LoonKissSurge/refs/heads/main/Surge/Beta/%E4%BA%AC%E4%B8%9C%E6%AF%94%E4%BB%B7.beta.sgmodule
+
+# 广告all in one
+
+**surge**
+
+https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rewrite/Surge/AllInOne/AllInOne_Mock.sgmodule
+
+---
