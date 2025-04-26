@@ -1,5 +1,6 @@
-#!name=V2EX 无密码自动签到
-#!desc=基于Cookie持久化的自动签到方案
+#!name=V2EX自动签到
+#!desc=v2ex自动签到
+#!system=mac
 
 
 [Script]
