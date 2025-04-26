@@ -1,6 +1,11 @@
-[MITM]
-hostname = www.v2ex.com
+#!name=V2EX 无密码自动签到
+#!desc=基于Cookie持久化的自动签到方案
+
 
 [Script]
-http-response ^https:\/\/www\.v2ex\.com script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/v2ex_cookie.js
-cron "0 8 * * *" script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/v2ex_checkin.js
+v2ex = type=cron,cronexp=30 7 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/v2ex_checkin.js,wake-system=1,timeout=15
+
+v2ex-cookie = type=http-response,pattern=^https:\/\/www\.v2ex\.com\/($|mission/daily|notifications),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/v2ex_cookie.js,requires-body=0
+
+[MITM]
+hostname = www.v2ex.com
