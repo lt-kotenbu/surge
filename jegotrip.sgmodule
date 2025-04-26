@@ -1,5 +1,0 @@
-[Script]
-wuybx = type=cron,cronexp=0 9 * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/jegotrip.js,wake-system=1,timeout=15
-
-[MITM]
-hostname = app3.jegotrip.com.cn
