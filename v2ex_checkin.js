@@ -1,87 +1,75 @@
-const $ = new API("v2ex-checkin", true);
-const KEY = "v2ex_daily_info";
-const SUCCESS_TEXT = "每日登录奖励已领取";
+const $ = new API('v2ex-checkin', true);
+const COOKIE_KEY = 'v2ex_session';
+const STORE_KEY = 'v2ex_daily';
+const SUCCESS_TEXT = '每日登录奖励已领取';
 
-function getStorage() {
-  return JSON.parse($persistentStore.read(KEY) || {};
+function isActiveSession(cookie) {
+  return cookie && cookie.length > 40 && 
+         !cookie.includes('deleted') && 
+         cookie.includes('A2=');
 }
 
-function setStorage(data) {
-  $persistentStore.write(JSON.stringify(data), KEY);
-}
-
-// 在签到脚本中添加校验
-function checkCookieValid(body) {
-  const invalidPatterns = [
-    /请先登录/,
-    /class="signin"/,
-    /href="\/signin"/
-  ];
-  return !invalidPatterns.some(pattern => pattern.test(body));
-}
-
-// 在请求回调中使用
-if (!checkCookieValid(res.body)) {
-  handleLogin(); // 触发重新登录
-  retryCheckIn(); // 重试签到
-}
-
-function isSameDay(timestamp) {
-  const date = new Date(timestamp);
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() &&
-         date.getMonth() === now.getMonth() &&
-         date.getDate() === now.getDate();
-}
-
-function handleCheckIn(text) {
-  const daysMatch = text.match(/已连续登录 (\d+) 天/);
-  const dailyInfo = {
-    lastCheckInTime: Date.now(),
-    checkInDays: daysMatch ? parseInt(daysMatch[1]) : 0
-  };
-  setStorage(dailyInfo);
-  $.notify("✅ V2EX 自动签到", "", "签到成功");
-}
-
-async function checkIn() {
-  // 检查时间是否在 8 点后
-  if (new Date().getHours() < 8) return;
-
-  const storage = getStorage();
-  if (storage.lastCheckInTime && isSameDay(storage.lastCheckInTime)) return;
-
-  const url = "https://www.v2ex.com/mission/daily";
-  const res = await $.http.get({ url });
+async function attemptCheckIn() {
+  const cookie = $.read(COOKIE_KEY);
   
-  if (res.status !== 200) {
-    $.notify("❌ V2EX 自动签到", "", "请求失败");
+  // 会话有效性验证
+  if (!isActiveSession(cookie)) {
+    $.notify('❌ V2EX 签到失败', '未检测到有效会话', '请手动登录');
     return;
   }
 
-  const redeemLink = res.body.match(/\/mission\/daily\/redeem\?once=\d+/);
-  
-  if (redeemLink) {
-    const redeemRes = await $.http.get({
-      url: `https://www.v2ex.com${redeemLink[0]}`
+  // 时间验证 (北京时间8点后)
+  const cnTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Shanghai"});
+  if (new Date(cnTime).getHours() < 8) return;
+
+  // 重复签到检查
+  const dailyData = JSON.parse($.read(STORE_KEY) || '{}');
+  if (dailyData.lastCheck && (Date.now() - dailyData.lastCheck < 86400_000)) {
+    $.log('今日已签到');
+    return;
+  }
+
+  try {
+    // 第一步：获取签到参数
+    const missionRes = await $.fetch({
+      url: 'https://www.v2ex.com/mission/daily',
+      headers: { Cookie: cookie }
     });
     
-    if (redeemRes.body.includes(SUCCESS_TEXT)) {
-      handleCheckIn(redeemRes.body);
+    // 会话有效性检查
+    if (missionRes.body.includes('/signin')) {
+      $.notify('⚠️ V2EX 会话已过期', '请手动登录', '点击重新登录', 'https://www.v2ex.com/signin');
+      return;
     }
-  } else if (res.body.includes(SUCCESS_TEXT)) {
-    handleCheckIn(res.body);
-  } else {
-    $.notify("❌ V2EX 自动签到", "", "签到失败");
+
+    // 第二步：执行签到
+    const redeemPath = missionRes.body.match(/\/mission\/daily\/redeem\?once=\d+/)?.[0];
+    if (redeemPath) {
+      await $.fetch({
+        url: `https://www.v2ex.com${redeemPath}`,
+        headers: { Cookie: cookie }
+      });
+    }
+
+    // 第三步：验证结果
+    const verifyRes = await $.fetch({
+      url: 'https://www.v2ex.com/mission/daily',
+      headers: { Cookie: cookie }
+    });
+
+    if (verifyRes.body.includes(SUCCESS_TEXT)) {
+      const consecutiveDays = verifyRes.body.match(/已连续登录 (\d+) 天/)?.[1] || 0;
+      $.write(JSON.stringify({
+        lastCheck: Date.now(),
+        days: consecutiveDays
+      }), STORE_KEY);
+      $.notify('✅ V2EX 签到成功', `连续签到 ${consecutiveDays} 天`, '查看详情', 'https://www.v2ex.com/mission/daily');
+    } else {
+      throw new Error('签到结果验证失败');
+    }
+  } catch (e) {
+    $.notify('❌ V2EX 签到异常', e.message);
   }
 }
 
-if (typeof $request !== "undefined") {
-  // 处理 MITM 响应
-  checkIn();
-  $done({});
-} else {
-  // 直接执行
-  checkIn();
-  $done();
-}
+(typeof $request === 'undefined') ? attemptCheckIn() : $done();
