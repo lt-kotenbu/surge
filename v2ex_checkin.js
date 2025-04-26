@@ -10,6 +10,22 @@ function setStorage(data) {
   $persistentStore.write(JSON.stringify(data), KEY);
 }
 
+// 在签到脚本中添加校验
+function checkCookieValid(body) {
+  const invalidPatterns = [
+    /请先登录/,
+    /class="signin"/,
+    /href="\/signin"/
+  ];
+  return !invalidPatterns.some(pattern => pattern.test(body));
+}
+
+// 在请求回调中使用
+if (!checkCookieValid(res.body)) {
+  handleLogin(); // 触发重新登录
+  retryCheckIn(); // 重试签到
+}
+
 function isSameDay(timestamp) {
   const date = new Date(timestamp);
   const now = new Date();
