@@ -40,6 +40,23 @@ const signature = generateSign(queryParams);
 !(async () => {
   $.signs = []; // 签到信息
   $.sign_result = [];
+//新增
+    !(async () => {
+  $.signs = []; // 签到信息
+  $.sign_result = [];
+  
+  // 新增：调用签到查询接口验证 Token 有效性
+  await querySign();
+  
+  // 验证 Token：正常返回为数组格式，非数组则为无效
+  if (!Array.isArray($.signs)) {
+    $.msg($.name, '❌ Token 验证失败', '请检查 token 配置是否正确');
+    $.done();
+    return; // 终止脚本
+  }
+//end
+
+    
   $.everydayTaskList = []; // 每日任务列表
   $.wealTaskList = []; // 福利任务列表
   $.specialTaskList = []; //特殊任务列表
