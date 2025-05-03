@@ -4,4 +4,4 @@
 #!arguments-desc = token: 填写你的token
 
 [Script]
-无忧行签到 = type=cron,cronexp=30 7 * * *,script-path=https://raw.githubusercontent.com/jacobhere/Jego_sign/refs/heads/main/Jego_sign.js
+无忧行签到 = type=cron,cronexp=30 7 * * *,script-path=https://raw.githubusercontent.com/jacobhere/Jego_sign/refs/heads/main/Jego_sign.js,argument=const={{{token}}}
