@@ -37,9 +37,6 @@ function generateSign(params) {
 }
 // 生成签名
 const signature = generateSign(queryParams);
-!(async () => {
-  $.signs = []; // 签到信息
-  $.sign_result = [];
 //新增
     !(async () => {
   $.signs = []; // 签到信息
