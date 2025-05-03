@@ -1,2 +1,4 @@
+#!name= 无忧行签到
+
 [Script]
 无忧行签到 = type=cron,cronexp=30 7 * * *,script-path=https://raw.githubusercontent.com/jacobhere/Jego_sign/refs/heads/main/Jego_sign.js
