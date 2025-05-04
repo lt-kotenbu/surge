@@ -1,6 +1,6 @@
 #!name= 无忧行签到
 #!desc= 用jacobhere大佬写的脚本做的无忧行签到模块
-#!arguments = token:aaa
+#!argument = token:aaa
 #!arguments-desc = 请填写token
 
 [Script]
