@@ -1,5 +1,4 @@
-const token = '{{token}}';
 
-console.log("{{token}}")
+console.log(token);
 
 $done()
