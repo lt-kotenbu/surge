@@ -1,7 +1,7 @@
 //使用jacobhere大佬的代码，仅在token部分修改
 
 const $ = new Env('无忧行');
-const token = '$argument';
+const token = $argument;
 console.log(token);
 $.secretKey = 'online_jego_h5';
 $.secretVal = '93EFE107DDE6DE51';
