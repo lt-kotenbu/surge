@@ -3,6 +3,7 @@
 const $ = new Env('无忧行');
 const token = $argument;
 console.log(token);
+console.log($argument);
 $.secretKey = 'online_jego_h5';
 $.secretVal = '93EFE107DDE6DE51';
 const currentTimestamp = Date.now()*1000+765; // 使用标准毫秒时间戳
