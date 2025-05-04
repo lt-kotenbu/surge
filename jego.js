@@ -1,9 +1,8 @@
 //使用jacobhere大佬的代码，仅在token部分修改
-
-const $ = new Env('无忧行');
-const token = $argument;
-console.log(token);
 console.log($argument);
+const $ = new Env('无忧行');
+let token = $argument;
+console.log(token);
 $.secretKey = 'online_jego_h5';
 $.secretVal = '93EFE107DDE6DE51';
 const currentTimestamp = Date.now()*1000+765; // 使用标准毫秒时间戳
