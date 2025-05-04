@@ -4,4 +4,4 @@
 #!arguments-desc = 请填写token
 
 [Script]
-无忧行签到 = type=cron,cronexp=0 13 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/jego.js,argument=token
+无忧行签到 = type=cron,cronexp=0 13 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/jego.js,argument= token
