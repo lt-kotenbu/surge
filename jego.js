@@ -47,6 +47,8 @@ const signature = generateSign(queryParams);
     //await queryRedDot();
     //await expireRewardQuery();
     await querySign();
+    console.log('签到数据:', JSON.stringify($.signs, null, 2));
+
     //await querySpecialTask();
     //await queryEveryDataTask();
     //await queryWealTask();
