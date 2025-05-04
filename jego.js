@@ -5,7 +5,9 @@ const token = 'a109bc9f69b643c48091a43cabbace41';
 console.log(token);
 $.secretKey = 'online_jego_h5';
 $.secretVal = '93EFE107DDE6DE51';
-const currentTimestamp = Date.now()*1000+765; // 使用标准毫秒时间戳
+const currentTimestamp = Date.now()*1000+765;// 使用标准毫秒时间戳
+console.log(Date.now());//原本的时间戳
+console.log(currentTimestamp);
 const queryParams = {
     token: token,
     lang: 'zh_CN',
