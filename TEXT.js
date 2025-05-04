@@ -1,4 +1,4 @@
 
-console.log(token);
+console.log($argument);
 
 $done()
