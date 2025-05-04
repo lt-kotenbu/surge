@@ -1,5 +1,5 @@
-function showConsoleNotification(title, message) {
-  console.log(`{{token}} ${title}: ${message}`);
-}
+const token = '{{token}}';
+
+console.log("{{token}}")
 
 $done()
