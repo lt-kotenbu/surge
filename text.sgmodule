@@ -6,4 +6,4 @@
 [Script]
 //TEXT = type=cron,cronexp=0 13 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/TEXT.js,argument=token
 
-TEXT = type=cron,cronexp=0 13 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/jego.js,argument=token
+TEXT1 = type=cron,cronexp=0 13 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/jego.js,argument=token
