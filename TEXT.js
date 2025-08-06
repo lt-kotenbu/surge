@@ -1,4 +1,0 @@
-
-console.log($argument);
-
-$done()
