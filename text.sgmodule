@@ -1,7 +1,0 @@
-#!name= text
-#!desc= text
-#!arguments = token:aaa
-#!arguments-desc = 请填写token
-
-[Script]
-TEXT = type=cron,cronexp=0 13 * * *,script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/TEXT.js,argument= token
