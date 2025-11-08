@@ -9,9 +9,17 @@
 DOMAIN,appcloud.zhihu.com,REJECT
 DOMAIN,appcloud2.in.zhihu.com,REJECT
 DOMAIN,mantis.bayescom.com,REJECT
+DOMAIN,vt.bidex.cn,REJECT
+DOMAIN,im-x.jd.com,REJECT
+DOMAIN,datahub.zhihu.com,REJECT
+DOMAIN,apm.zhihu.com,REJECT
+DOMAIN,upc.zztfly.com,REJECT
 DOMAIN,catfront.dianping.com,REJECT
 DOMAIN,lx0.meituan.com,REJECT
 DOMAIN,toblog.volceapplog.com,REJECT
+DOMAIN,tobapplog.volceapplog.com,REJECT
+DOMAIN,cnlogs.umeng.com,REJECT
+DOMAIN,pv.sohu.com,REJECT
 DOMAIN,s3plus.meituan.net,REJECT
 DOMAIN,ddplus.meituan.net,REJECT
 DOMAIN,crash2.zhihu.com,REJECT
@@ -29,8 +37,10 @@ IP-CIDR6,2402:4e00:1200:ed00:0:9089:6dac:96b6/128,REJECT
 //
 ^https?:\/\/www\.zhihu\.com\/sc-profiler-zhapp,REJECT
 ^https?:\/\/m-cloud\.zhihu\.com\/api\/personal\/log\/hit\/target,REJECT
+^https?:\/\/m-cloud\.zhihu\.com\/api\/apm\/sampling\/get,REJECT
 ^https?:\/\/appcloud2\.in\.zhihu\.com\/api\/env\/check,REJECT
-
+^https?:\/\/img\d+\.360buyimg\.com\/tgx\/jfs\/.*\.(jpg|jpeg|png|webp)\?filtered=pread,REJECT
+^https?:\/\/a1\.alibabausercontent\.com\/prod\/feupload\/user\/,REJECT
 //
 ^https:\/\/[^\/]*pic[^\/]*\.zhimg\.com\/[^?\/]+\.heic\?source=.* - reject
 ^https?:\/\/zhstatic\.zhihu\.com\/brand-ad\/image\/ - reject
@@ -108,4 +118,4 @@ http-response-jq ^https:\/\/api\.zhihu\.com\/questions\/\d+(?:\/answers|\/feeds|
 拦截服务器推送配置 config all = type=http-response, pattern=^https:\/\/m-cloud\.zhihu\.com\/api\/cloud\/zhihu\/config\/all\?, script-path=https://raw.githubusercontent.com/luestr/ProxyResource/refs/heads/main/Resource/JavaScript/Zhihu/Zhihu_remove_ads.js, requires-body=true
 
 [MITM]
-hostname = %APPEND% api.zhihu.com, appcloud2.zhihu.com, link.zhihu.com, m-cloud.zhihu.com, page-info.zhihu.com, www.zhihu.com, zhuanlan.zhihu.com,zhstatic.zhihu.com, m-cloud.zhihu.com,appcloud2.in.zhihu.com, www.zhihu.com
+hostname = %APPEND% api.zhihu.com, appcloud2.zhihu.com, link.zhihu.com, m-cloud.zhihu.com, page-info.zhihu.com, www.zhihu.com, zhuanlan.zhihu.com,zhstatic.zhihu.com,appcloud2.in.zhihu.com,a1.alibabausercontent.com,img1.360buyimg.com,img2.360buyimg.com,img3.360buyimg.com,
