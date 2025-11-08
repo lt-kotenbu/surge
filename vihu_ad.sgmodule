@@ -117,5 +117,7 @@ http-response-jq ^https:\/\/api\.zhihu\.com\/questions\/\d+(?:\/answers|\/feeds|
 
 拦截服务器推送配置 config all = type=http-response, pattern=^https:\/\/m-cloud\.zhihu\.com\/api\/cloud\/zhihu\/config\/all\?, script-path=https://raw.githubusercontent.com/luestr/ProxyResource/refs/heads/main/Resource/JavaScript/Zhihu/Zhihu_remove_ads.js, requires-body=true
 
+http-response ^https?:\/\/(www|api|appcloud2|zhuanlan)\.zhihu\.com\/.* script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/refs/heads/main/Zhihu_Cl.js, requires-body=true, timeout=20
+
 [MITM]
 hostname = %APPEND% api.zhihu.com, appcloud2.zhihu.com, link.zhihu.com, m-cloud.zhihu.com, page-info.zhihu.com, www.zhihu.com, zhuanlan.zhihu.com,zhstatic.zhihu.com,appcloud2.in.zhihu.com,a1.alibabausercontent.com,img1.360buyimg.com,img2.360buyimg.com,img3.360buyimg.com,
