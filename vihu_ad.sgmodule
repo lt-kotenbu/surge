@@ -117,7 +117,7 @@ http-response-jq ^https:\/\/api\.zhihu\.com\/questions\/\d+(?:\/answers|\/feeds|
 
 拦截服务器推送配置 config all = type=http-response, pattern=^https:\/\/m-cloud\.zhihu\.com\/api\/cloud\/zhihu\/config\/all\?, script-path=https://github.com/lt-kotenbu/surge/raw/refs/heads/main/Zhihu_Cl.js, requires-body=true
 
-http-response ^https?:\/\/(www|m|zhuanlan|api|m-cloud|page-info|appcloud2(\.in)?|link)\.zhihu\.com\/.* script-path=zhihu.strict.surge.js, requires-body=true, timeout=20
+http-response ^https?:\/\/(www|m|zhuanlan|api|m-cloud|page-info|appcloud2(\.in)?|link)\.zhihu\.com\/.* script-path=https://github.com/lt-kotenbu/surge/raw/refs/heads/main/Zhihu_Cl.js, requires-body=true, timeout=20
 
 
 [MITM]
