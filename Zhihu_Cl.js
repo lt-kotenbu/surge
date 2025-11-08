@@ -1,21 +1,24 @@
+
 /*
   Zhihu Cleaner for Surge
-  来源参考/思路借鉴：https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/zhihu.js
-  结合你的 HAR（2025-11-09 分析）中出现的知乎相关域名与端点做了适配与稳健性增强
+  来源/思路参考： https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/zhihu.js
+  在你的 HAR（2025-11-09 分析）中出现的知乎相关域名与端点基础上做适配与稳健性增强
   适配环境：Surge (http-response 脚本，requires-body=true)
   更新时间：2025-11-09
+  作者：ChatGPT (GPT-5 Thinking)
 */
 
+/* --------------------- 基础安全检查 --------------------- */
 if (!$response || typeof $response.body === "undefined") {
   $done({});
 }
 
-const url = $request && $request.url ? $request.url : "";
+const url = ($request && $request.url) || "";
 const headers = ($response && $response.headers) || {};
 const ct = (headers["Content-Type"] || headers["content-type"] || "").toLowerCase();
+const bodyText = String($response.body ?? "");
 
-// —— 安全解析 JSON（容错 HTML/空体/非 JSON） ——
-let bodyText = $response.body;
+/* 只处理 JSON 响应，其他类型直接放行，避免误伤（HTML/图片/视频等） */
 let obj = null;
 let isJSON = false;
 try {
@@ -24,20 +27,35 @@ try {
     isJSON = true;
   }
 } catch (e) {
-  // 不是 JSON，直接跳出
+  // 不是合法 JSON，不处理
 }
-
 if (!isJSON) {
-  // 非 JSON 响应不处理，避免误伤（例如 HTML、视频、图片等）
   $done({});
   return;
 }
 
-// ========= 工具方法 =========
+/* --------------------- 通用工具 --------------------- */
+function getHost(href) {
+  try { return href.replace(/^https?:\/\/([^\/?#]+).*/i, "$1"); } catch { return ""; }
+}
+const host = getHost(url);
+const isZhihuDomain = /(^|\.)zhihu\.com$|(^|\.)zhimg\.com$|(^|\.)appcloud2\.zhihu\.com$/.test(host);
+
+/* 若你的规则已限制 host，可关闭此判断。这里多一道保险，避免误处理其它站点。 */
+if (!isZhihuDomain) {
+  $done({ body: JSON.stringify(obj) });
+  return;
+}
+
 function getUrlParamValue(href, key) {
   try {
-    const qs = href.substring(href.indexOf("?") + 1);
-    const pairs = qs.split("&").map((p) => p.split("="));
+    const qIndex = href.indexOf("?");
+    if (qIndex < 0) return undefined;
+    const qs = href.substring(qIndex + 1);
+    const pairs = qs.split("&").map((p) => {
+      const [k, v=""] = p.split("=");
+      return [decodeURIComponent(k), decodeURIComponent(v)];
+    });
     const map = Object.fromEntries(pairs);
     return map[key];
   } catch {
@@ -48,26 +66,63 @@ function getUrlParamValue(href, key) {
 function fixPos(arr) {
   if (!Array.isArray(arr)) return;
   for (let i = 0; i < arr.length; i++) {
-    try {
-      arr[i].offset = i + 1;
-    } catch {}
+    try { if (arr[i]) arr[i].offset = i + 1; } catch {}
   }
 }
 
-// 递归删除对象中的广告相关字段/节点（保守规则，尽量不误伤）
+/* --------------------- 广告判定/清理 --------------------- */
 const AD_KEYS = new Set([
-  "ad", "ads", "ad_info", "adjson", "advert", "advert_info", "advertising",
-  "adJson", "adExtra", "promotion_extra", "promotion", "brand_select"
+  "ad","ads","ad_info","adjson","adJson","ad_extra","adExtra","extra_ad","mix_ad",
+  "advert","advert_info","advertising","advertisement","advertisements",
+  "promotion","promotion_extra","promotions","brand_select","brandPromotion",
+  "is_ad","ad_type","adType","ad_data","adData","adslot","ad_unit","adUnit"
 ]);
-const AD_FLAG_TEXTS = ["广告", "推广", "合作推广", "品牌甄选"];
+
+const AD_FLAG_TEXTS = [
+  "广告","推广","合作推广","品牌甄选","品牌推广","商业推广","赞助",
+  "sponsor","sponsored","promotion","promoted","advertisement","ad "
+];
 
 function hasAdFlagText(v) {
   try {
     const s = typeof v === "string" ? v : JSON.stringify(v);
-    return AD_FLAG_TEXTS.some((kw) => s && s.includes && s.includes(kw));
+    if (!s) return false;
+    return AD_FLAG_TEXTS.some((kw) => s.includes && s.includes(kw));
   } catch {
     return false;
   }
+}
+
+function shouldDropItem(i) {
+  try {
+    if (!i || typeof i !== "object") return false;
+
+    // 常见类型命中（ad/paid/aggregation/advert 等）
+    const t = (i.type || i.biz_type || i.business_type || i.card_type || i.cell_type || "");
+    if (typeof t === "string") {
+      const ts = t.toLowerCase();
+      if (ts.includes("ad") || ts.includes("advert") || ts.includes("paid") || ts.includes("aggregation") || ts.includes("feed_advert")) return true;
+    }
+
+    // 明确广告字段
+    for (const k of Object.keys(i)) {
+      if (AD_KEYS.has(k)) return true;
+    }
+
+    // 文案带广告提示
+    if (hasAdFlagText(i?.common_card?.footline?.elements?.[0]?.text?.panel_text)) return true;
+    if (hasAdFlagText(i?.tips)) return true;
+    if (hasAdFlagText(i?.target?.metrics_area?.text)) return true;
+    if (hasAdFlagText(i?.title) || hasAdFlagText(i?.sub_title)) return true;
+
+    // 盐选/付费
+    if (i?.common_card?.feed_content?.source_line?.elements?.[1]?.text?.panel_text?.includes?.("盐选")) return true;
+    if (i?.target?.answer_type?.includes?.("paid")) return true;
+
+    // 直播/戏剧类
+    if (i?.extra?.type === "drama" || i?.extra?.type === "live") return true;
+  } catch {}
+  return false;
 }
 
 function stripAdsDeep(node) {
@@ -77,57 +132,22 @@ function stripAdsDeep(node) {
     const cleaned = [];
     for (const item of node) {
       const newItem = stripAdsDeep(item);
-      // 过滤典型的广告/营销/付费/直播/聚合/横排卡
       if (shouldDropItem(newItem)) continue;
       cleaned.push(newItem);
     }
     return cleaned;
   } else {
     for (const k of Object.keys(node)) {
-      // 字段名命中广告关键词，直接丢弃
-      if (AD_KEYS.has(k)) {
-        delete node[k];
-        continue;
-      }
-      // 文案里带“广告/推广”等
-      if (typeof node[k] === "string" && hasAdFlagText(node[k])) {
-        delete node[k];
-        continue;
-      }
-      // 递归
-      node[k] = stripAdsDeep(node[k]);
+      if (AD_KEYS.has(k)) { delete node[k]; continue; }
+      const v = node[k];
+      if (typeof v === "string" && hasAdFlagText(v)) { delete node[k]; continue; }
+      node[k] = stripAdsDeep(v);
     }
     return node;
   }
 }
 
-function shouldDropItem(i) {
-  try {
-    if (!i || typeof i !== "object") return false;
-
-    // 类型字段包含广告或付费、聚合等
-    const t = (i.type || i.biz_type || i.business_type || i.card_type || i.cell_type || "");
-    if (typeof t === "string") {
-      const ts = t.toLowerCase();
-      if (ts.includes("ad") || ts.includes("advert") || ts.includes("paid") || ts.includes("aggregation")) return true;
-    }
-
-    // 常见字段命中
-    if (i.ad || i.ad_info || i.adjson || i.promotion_extra || i.brand_select) return true;
-
-    // 脚部或提示里出现“广告/推广/合作推广/品牌甄选”
-    if (hasAdFlagText(i?.common_card?.footline?.elements?.[0]?.text?.panel_text)) return true;
-    if (hasAdFlagText(i?.tips)) return true;
-    if (hasAdFlagText(i?.target?.metrics_area?.text)) return true;
-
-    // 盐选/付费
-    if (i?.common_card?.feed_content?.source_line?.elements?.[1]?.text?.panel_text?.includes?.("盐选")) return true;
-  } catch {}
-  return false;
-}
-
-// —— 针对视频卡片，尽可能回填/规范 videoID ——
-// （部分来源：HAR 中 mp4 请求较多，优先减少出错与误触发推广）
+/* 针对视频卡片补充 videoID，减少因推广卡结构异常导致的播放失败 */
 function tryFillVideoId(card) {
   try {
     // market_card
@@ -135,8 +155,7 @@ function tryFillVideoId(card) {
       const vid = getUrlParamValue(card.fields.header.url, "videoID");
       if (vid) card.fields.body.video.id = vid;
     }
-
-    // common_card（推广视频）
+    // common_card（zvideo）
     if (card?.type === "common_card") {
       if (card?.extra?.type === "zvideo") {
         const videoUrl = card?.common_card?.feed_content?.video?.customized_page_url;
@@ -144,80 +163,111 @@ function tryFillVideoId(card) {
           const vid = getUrlParamValue(videoUrl, "videoID");
           if (vid) card.common_card.feed_content.video.id = vid;
         }
-      } else if (card?.common_card?.feed_content?.video?.id) {
-        // 回退：从 body 文本粗略提取（尽量不用，但保留逻辑兼容旧接口）
-        const search = '"feed_content":{"video":{"id":';
-        const idx = bodyText.indexOf(search);
-        if (idx > 0) {
-          const s = bodyText.substring(idx + search.length);
-          const vid = s.substring(0, s.indexOf(","));
-          if (vid) card.common_card.feed_content.video.id = vid.replace(/["']/g, "");
-        }
       }
     }
   } catch {}
 }
 
-// ========= 各接口精准处理 =========
-// 说明：以下分支覆盖了 HAR 与常见版本中出现的知乎端点。
-// 若接口结构变化，仍有 stripAdsDeep 的兜底净化。
+/* 小工具：对常见列表字段做“温和净化” */
+function lightCleanList(container, keys = ["data","list","items","cards"]) {
+  try {
+    for (const k of keys) {
+      if (Array.isArray(container?.[k]) && container[k].length) {
+        container[k] = container[k].filter((i) => !shouldDropItem(i));
+        // 尝试修正 video ID
+        for (const it of container[k]) tryFillVideoId(it);
+        fixPos(container[k]);
+      }
+      // 二级 data.data
+      if (container?.[k]?.data && Array.isArray(container[k].data)) {
+        container[k].data = container[k].data.filter((i) => !shouldDropItem(i));
+        for (const it of container[k].data) tryFillVideoId(it);
+        fixPos(container[k].data);
+      }
+    }
+  } catch {}
+}
 
+/* --------------------- 各端点定制处理 --------------------- */
 try {
   // 1) 新版回答/文章列表：隐藏“相关提问”
   if (url.includes("/answers/v2/") || url.includes("/articles/v2/")) {
     if (obj?.third_business?.related_queries?.queries?.length > 0) {
       obj.third_business.related_queries.queries = [];
     }
+    obj = stripAdsDeep(obj);
   }
 
-  // 2) 全局配置：灰度/顶部图等
+  // 2) 全站配置
   else if (url.includes("/api/cloud/zhihu/config/all")) {
     if (obj?.data?.configs?.length > 0) {
       for (const i of obj.data.configs) {
         if (i?.configKey === "feed_gray_theme" && i?.configValue) {
-          i.configValue.start_time = 3818332800; // 2090-12-31 00:00:00
-          i.configValue.end_time = 3818419199;   // 2090-12-31 23:59:59
+          // 将灰度期“移到未来”，并标记关闭
+          if (typeof i.configValue.start_time === "string") {
+            i.configValue.start_time = "3818332800";
+            i.configValue.end_time = "3818419199";
+          } else {
+            i.configValue.start_time = 3818332800;
+            i.configValue.end_time = 3818419199;
+          }
           i.status = false;
         } else if (i?.configKey === "feed_top_res" && i?.configValue) {
-          i.configValue.start_time = 3818332800;
-          i.configValue.end_time = 3818419199;
+          if (typeof i.configValue.start_time === "string") {
+            i.configValue.start_time = "3818332800";
+            i.configValue.end_time = "3818419199";
+          } else {
+            i.configValue.start_time = 3818332800;
+            i.configValue.end_time = 3818419199;
+          }
         }
       }
     }
     obj = stripAdsDeep(obj);
   }
 
-  // 3) 旧版 v4 answers/articles
+  // 3) 旧版 v4 answers/articles（仅清理广告字段，不直接清空数据以免影响正常使用）
   else if (url.includes("/api/v4/answers")) {
-    if (obj?.data) delete obj.data;
-    if (obj?.paging) delete obj.paging;
+    lightCleanList(obj, ["data"]);
+    if (obj?.paging) delete obj.paging; // 可视情况保留/删除
+    obj = stripAdsDeep(obj);
   } else if (url.includes("/api/v4/articles")) {
-    ["ad_info", "paging", "recommend_info"].forEach((k) => delete obj[k]);
+    if (obj) {
+      delete obj.ad_info;
+      delete obj.recommend_info;
+      lightCleanList(obj, ["data"]);
+      obj = stripAdsDeep(obj);
+    }
   }
 
   // 4) appcloud 全局配置
   else if (url.includes("/appcloud2.zhihu.com/v3/config")) {
-    if (obj?.config?.hp_channel_tab) delete obj.config.hp_channel_tab;
-
     if (obj?.config) {
       if (obj.config?.homepage_feed_tab?.tab_infos) {
         obj.config.homepage_feed_tab.tab_infos = obj.config.homepage_feed_tab.tab_infos.filter((tab) => {
           if (tab.tab_type === "activity_tab") {
-            tab.start_time = "3818332800";
-            tab.end_time = "3818419199";
+            // 仅保留 activity_tab，其它移除
+            if (typeof tab.start_time === "string") {
+              tab.start_time = "3818332800"; tab.end_time = "3818419199";
+            } else {
+              tab.start_time = 3818332800; tab.end_time = 3818419199;
+            }
             return true;
-          } else {
-            return false;
           }
+          return false;
         });
       }
       if (obj.config?.zombie_conf) obj.config.zombie_conf.zombieEnable = false;
 
       if (obj.config?.gray_mode) {
-        // 修正原脚本的属性名问题
         obj.config.gray_mode.enable = false;
-        obj.config.gray_mode.start_time = "3818332800";
-        obj.config.gray_mode.end_time = "3818419199";
+        if (typeof obj.config.gray_mode.start_time === "string") {
+          obj.config.gray_mode.start_time = "3818332800";
+          obj.config.gray_mode.end_time = "3818419199";
+        } else {
+          obj.config.gray_mode.start_time = 3818332800;
+          obj.config.gray_mode.end_time = 3818419199;
+        }
       }
 
       if (obj.config?.zhcnh_thread_sync) {
@@ -228,17 +278,18 @@ try {
         obj.config.zhcnh_thread_sync.ZHHTTPSessionManager_setupZHHTTPHeaderField = "1";
       }
 
-      // 基于 HAR 中视频请求较多，控制首页视频数量/弹框等
       obj.config.zvideo_max_number = 1;
       obj.config.is_show_followguide_alert = false;
     }
     obj = stripAdsDeep(obj);
   }
 
-  // 5) 悬浮图标/浮层
+  // 5) 悬浮层/浮标
   else if (url.includes("/commercial_api/app_float_layer")) {
-    if (obj && typeof obj === "object" && "feed_egg" in obj) {
+    if (obj && typeof obj === "object") {
       delete obj.feed_egg;
+      delete obj.ad;
+      delete obj.ad_info;
     }
   }
 
@@ -249,58 +300,62 @@ try {
         ["recommend", "section"].includes(i?.tab_type)
       );
     }
+    obj = stripAdsDeep(obj);
   }
 
-  // 7) 关注/时刻流：去“为您推荐”
-  else if (url.includes("/moments_v3")) {
-    if (Array.isArray(obj?.data) && obj.data.length > 0) {
-      obj.data = obj.data.filter((i) => !i?.title?.includes("为您推荐"));
+  // 7) 关注/时刻流：去“为您推荐”等
+  else if (url.includes("/moments") || url.includes("/moments_v3")) {
+    lightCleanList(obj, ["data","list","items"]);
+    if (Array.isArray(obj?.data)) {
+      obj.data = obj.data.filter((i) => !(i?.title?.includes?.("为您推荐")));
     }
     obj = stripAdsDeep(obj);
   }
 
   // 8) Web Next 系列（BFF / data / render）：统一净化
   else if (url.includes("/next-bff")) {
+    lightCleanList(obj, ["data","items","list","cards"]);
     if (Array.isArray(obj?.data) && obj.data.length > 0) {
       obj.data = obj.data.filter((i) => !(
-        i?.origin_data?.type?.includes?.("ad") ||
-        i?.origin_data?.resource_type?.includes?.("ad") ||
+        i?.origin_data?.type?.toLowerCase?.().includes?.("ad") ||
+        i?.origin_data?.resource_type?.toLowerCase?.().includes?.("ad") ||
         i?.origin_data?.next_guide?.title?.includes?.("推荐")
       ));
       for (const card of obj.data) tryFillVideoId(card);
     }
     obj = stripAdsDeep(obj);
   } else if (url.includes("/next-data")) {
+    lightCleanList(obj?.data || obj, ["data","items"]);
     if (obj?.data?.data?.length > 0) {
-      obj.data.data = obj.data.data.filter((i) => !(i?.type?.includes?.("ad") || i?.data?.answer_type?.includes?.("PAID")));
+      obj.data.data = obj.data.data.filter((i) => !(String(i?.type || "").toLowerCase().includes("ad") || String(i?.data?.answer_type || "").includes("PAID")));
       for (const card of obj.data.data) tryFillVideoId(card);
+      fixPos(obj.data.data);
     }
     obj = stripAdsDeep(obj);
   } else if (url.includes("/next-render")) {
+    lightCleanList(obj, ["data","items","list","cards"]);
     if (Array.isArray(obj?.data) && obj.data.length > 0) {
       obj.data = obj.data.filter((i) => !(
         i?.adjson ||
         i?.biz_type_list?.includes?.("article") ||
         i?.biz_type_list?.includes?.("content") ||
-        i?.business_type?.includes?.("paid") ||
+        String(i?.business_type || "").toLowerCase().includes("paid") ||
         i?.section_info ||
         i?.tips ||
-        i?.type?.includes?.("ad")
+        String(i?.type || "").toLowerCase().includes("ad")
       ));
       for (const card of obj.data) tryFillVideoId(card);
+      fixPos(obj.data);
     }
     obj = stripAdsDeep(obj);
   }
 
   // 9) 问题回答列表：去广告/盐选/付费
   else if (url.includes("/questions/")) {
-    if (obj?.ad_info) delete obj.ad_info;
+    delete obj?.ad_info;
     if (obj?.data?.ad_info) delete obj.data.ad_info;
     if (obj?.query_info) delete obj.query_info;
-
-    if (Array.isArray(obj?.data) && obj.data.length > 0) {
-      obj.data = obj.data.filter((i) => !i?.target?.answer_type?.includes?.("paid"));
-    }
+    lightCleanList(obj, ["data","items"]);
     obj = stripAdsDeep(obj);
   }
 
@@ -309,73 +364,66 @@ try {
     if (Array.isArray(obj?.tab_list) && obj.tab_list.length > 0) {
       obj.tab_list = obj.tab_list.filter((i) => ["follow", "hot", "recommend"].includes(i?.tab_type));
     }
+    obj = stripAdsDeep(obj);
   }
 
-  // 11) 热榜信息流/榜单：去“合作推广/品牌甄选”
+  // 11) 热榜信息流/榜单
   else if (url.includes("/topstory/hot-lists/everyone-seeing")) {
     if (obj?.data?.data?.length > 0) {
       obj.data.data = obj.data.data.filter((i) => !i.target?.metrics_area?.text?.includes?.("合作推广"));
+      fixPos(obj.data.data);
     }
+    obj = stripAdsDeep(obj);
   } else if (url.includes("/topstory/hot-lists/total")) {
     if (Array.isArray(obj?.data) && obj.data.length > 0) {
       obj.data = obj.data.filter((i) => !Object.prototype.hasOwnProperty.call(i, "ad"));
-    }
-  }
-
-  // 12) 推荐信息流：统一净化 + 修复视频 ID + 去直播/聚合/伪装广告
-  else if (url.includes("/topstory/recommend")) {
-    if (Array.isArray(obj?.data) && obj.data.length > 0) {
-      obj.data = obj.data.filter((i) => {
-        // 市场卡：回填 videoID
-        if (i.type === "market_card" && i.fields?.header?.url && i.fields?.body?.video?.id !== undefined) {
-          const videoID = getUrlParamValue(i.fields.header.url, "videoID");
-          if (videoID) i.fields.body.video.id = videoID;
-          return true;
-        }
-        // 通用卡：去直播/推广/盐选，回填视频 id
-        if (i.type === "common_card") {
-          if (i.extra?.type === "drama") return false; // 直播
-          if (i.extra?.type === "zvideo") {
-            const videoUrl = i.common_card?.feed_content?.video?.customized_page_url;
-            const videoID = videoUrl ? getUrlParamValue(videoUrl, "videoID") : undefined;
-            if (videoID) i.common_card.feed_content.video.id = videoID;
-          } else if (i.common_card?.feed_content?.video?.id) {
-            // 回退提取
-            const search = '"feed_content":{"video":{"id":';
-            const sidx = bodyText.indexOf(search);
-            if (sidx > 0) {
-              const seg = bodyText.substring(sidx + search.length);
-              const vid = seg.substring(0, seg.indexOf(","));
-              if (vid) i.common_card.feed_content.video.id = vid.replace(/["']/g, "");
-            }
-          }
-          if (i.common_card?.footline?.elements?.[0]?.text?.panel_text?.includes?.("广告")) return false;
-          if (i.common_card?.feed_content?.source_line?.elements?.[1]?.text?.panel_text?.includes?.("盐选")) return false;
-          if (i?.promotion_extra) return false;
-          return true;
-        }
-        // 横排卡片/热榜聚合/伪装广告
-        if (typeof i.type === "string" && i.type.includes("aggregation_card")) return false;
-        if (i.type === "feed_advert") return false;
-
-        // 其他：交给兜底清理
-        return !shouldDropItem(i);
-      });
-
-      // 统一修复 offset
       fixPos(obj.data);
     }
     obj = stripAdsDeep(obj);
   }
 
-  // —— 兜底：对所有 JSON 结果做一次轻度净化（避免接口遗漏）——
+  // 12) 推荐信息流：去直播/聚合/伪装广告 + 修复视频 ID
+  else if (url.includes("/topstory/recommend")) {
+    if (Array.isArray(obj?.data) && obj.data.length > 0) {
+      obj.data = obj.data.filter((i) => {
+        // market_card：回填 videoID
+        if (i?.type === "market_card" && i?.fields?.header?.url && i?.fields?.body?.video) {
+          const videoID = getUrlParamValue(i.fields.header.url, "videoID");
+          if (videoID) i.fields.body.video.id = videoID;
+          return true;
+        }
+        // common_card：去直播/推广/盐选，尽量回填视频 id
+        if (i?.type === "common_card") {
+          if (i?.extra?.type === "drama" || i?.extra?.type === "live") return false;
+          if (i?.extra?.type === "zvideo") {
+            const videoUrl = i?.common_card?.feed_content?.video?.customized_page_url;
+            const videoID = videoUrl ? getUrlParamValue(videoUrl, "videoID") : undefined;
+            if (videoID) i.common_card.feed_content.video.id = videoID;
+          }
+          if (i?.common_card?.footline?.elements?.[0]?.text?.panel_text?.includes?.("广告")) return false;
+          if (i?.common_card?.feed_content?.source_line?.elements?.[1]?.text?.panel_text?.includes?.("盐选")) return false;
+          if (i?.promotion_extra) return false;
+          return true;
+        }
+        // 横排卡片/热榜聚合/伪装广告
+        const t = String(i?.type || "").toLowerCase();
+        if (t.includes("aggregation_card") || t.includes("feed_advert")) return false;
+        return !shouldDropItem(i);
+      });
+      fixPos(obj.data);
+    }
+    obj = stripAdsDeep(obj);
+  }
+
+  // —— 兜底：对所有 JSON 做一次轻度净化（避免接口遗漏）——
   else {
+    lightCleanList(obj, ["data","list","items","cards"]);
     obj = stripAdsDeep(obj);
   }
 } catch (e) {
-  // 最小可见性失败保护，不影响正常返回
+  // 最小可见性保护：任意异常不影响返回
   // $notification.post("Zhihu Cleaner", "处理异常", String(e));
 }
 
-// —— 结束 —— 
+/* --------------------- 结束返回 --------------------- */
 $done({ body: JSON.stringify(obj) });
