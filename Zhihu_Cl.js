@@ -7,6 +7,102 @@
 
 // 若响应体为空，直接放行
 if (!$response?.body) $done({});
+const URL_RULES = [
+  /https?:\/\/api\.zhihu\.com\/commercial_api\/real_time_launch_v2\b/i,
+  // 如需扩展“开屏/冷启动”相关变体，可按需加到列表，例如（先注释掉）：
+  // /https?:\/\/api\.zhihu\.com\/commercial_api\/real_time_launch_v\d+\b/i,
+];
+
+function shouldHandle(url) {
+  return URL_RULES.some((re) => re.test(url));
+}
+
+/** 最小、通用的“无内容”JSON 结构，尽量不引发客户端错误 */
+const MIN_SAFE_JSON = {
+  code: 0,                // 常见整型状态位
+  message: "ok",          // 常见文本状态位
+  data: [],               // 主体置空
+  paging: { is_end: true, next: null }, // 常见翻页结构
+};
+
+/** 可选方案：直接返回 204 No Content（有些客户端可能需要 JSON，默认关闭） */
+const RETURN_204 = false;
+
+try {
+  const url = $request && $request.url || "";
+  if (!shouldHandle(url)) {
+    // 非目标接口，放行
+    $done({});
+    return;
+  }
+
+  // —— 方案 A：204 空响应（默认关闭）——
+  if (RETURN_204) {
+    $done({ status: 204, headers: { "Content-Type": "application/json; charset=utf-8" }, body: "" });
+    return;
+  }
+
+  // —— 方案 B：返回最小安全 JSON（默认）——
+  const headers = Object.assign({}, $response && $response.headers);
+  headers["Content-Type"] = "application/json; charset=utf-8";
+
+  // 若原响应是 JSON，尝试解析并清空广告相关字段后再回写（更保险）
+  let body = $response && $response.body || "";
+  let out = MIN_SAFE_JSON;
+
+  try {
+    if (body && body.trim().startsWith("{")) {
+      const obj = JSON.parse(body);
+
+      // 常见广告字段名，统一清空
+      const AD_KEYS = [
+        "ad", "ads", "adInfo", "ad_info", "adverts", "advertisements", "advert",
+        "banners", "banner", "launch", "splash", "promotion", "promotions",
+        "creative", "creatives", "materials", "slots", "slot", "items", "list"
+      ];
+
+      // 递归清理函数：将广告相关字段置空
+      const clean = (o) => {
+        if (Array.isArray(o)) return [];         // 直接置空数组
+        if (o !== null && typeof o === "object") {
+          const ret = {};
+          for (const [k, v] of Object.entries(o)) {
+            if (AD_KEYS.includes(k)) {
+              // 根据原值类型置空
+              ret[k] = Array.isArray(v) ? [] : (v && typeof v === "object" ? {} : null);
+            } else {
+              ret[k] = clean(v);
+            }
+          }
+          return ret;
+        }
+        return o; // 基本类型原样返回
+      };
+
+      // 在原结构上做“保形清理”，最大程度避免客户端因为缺字段而报错
+      const cleaned = clean(obj);
+
+      // 若清理后结构缺少关键常见字段，则补齐最小安全字段
+      out = Object.assign({}, MIN_SAFE_JSON, cleaned);
+    }
+  } catch (_) {
+    // 解析失败则用最小 JSON 兜底
+    out = MIN_SAFE_JSON;
+  }
+
+  $done({
+    status: 200,
+    headers,
+    body: JSON.stringify(out),
+  });
+} catch (e) {
+  // 发生异常也返回最小安全 JSON，避免请求挂起
+  $done({
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify(MIN_SAFE_JSON),
+  });
+}
 
 const url = $request.url;
 let obj;
