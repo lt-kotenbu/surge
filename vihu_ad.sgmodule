@@ -24,9 +24,8 @@ DOMAIN,crash2.zhihu.com,REJECT
 DOMAIN,mqtt.zhihu.com,REJECT
 DOMAIN,sugar.zhihu.com,REJECT
 DOMAIN,zxid-m.mobileservice.cn,REJECT
-//
-IP-CIDR,103.41.167.237/32,REJECT
-IP-CIDR,118.89.204.198/32,REJECT
+
+
 
 [URL Rewrite]
 ^https:\/\/api\.zhihu\.com\/unlimited\/go\/my_card - reject
@@ -69,6 +68,9 @@ http-response-jq ^https:\/\/api\.zhihu\.com\/questions\/\d+(?:\/answers|\/feeds|
 ^https:\/\/www\.zhihu\.com\/api\/v4\/(?:answers|questions)\/\d+\/related-readings data-type=text data="{}" status-code=200
 ^https:\/\/www\.zhihu\.com\/commercial_api\/banners_v3\/mobile_banner data-type=text data="{}" status-code=200
 ^https:\/\/zhuanlan\.zhihu\.com\/api\/articles\/\d+\/recommendation data-type=text data="{}" status-code=200
+//
+IP-CIDR,103.41.167.237/32,REJECT
+IP-CIDR,118.89.204.198/32,REJECT
 
 [Script]
 http-response ^https?:\/\/(www|m|zhuanlan|api|m-cloud|page-info|appcloud2(\.in)?|link)\.zhihu\.com\/.* script-path=https://raw.githubusercontent.com/lt-kotenbu/surge/main/Zhihu_Cl.js, requires-body=true, timeout=20
