@@ -1,4 +1,4 @@
-> 知乎
+//知乎
 USER-AGENT,AVOS*, reject
 DOMAIN, appcloud.zhihu.com, reject
 DOMAIN, appcloud2.in.zhihu.com, reject
